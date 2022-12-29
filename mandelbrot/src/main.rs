@@ -1,8 +1,24 @@
+use image::png::PNGEncoder;
+use image::ColorType;
 use num::Complex;
+use std::fs::File;
 use std::str::FromStr;
 
 fn main() {
     let c: Complex<f64> = Complex { re: 1.0, im: -1.0 };
+}
+
+fn write_image(
+    filename: &str,
+    pixels: &[u8],
+    bounds: (usize, usize),
+) -> Result<(), std::io::Error> {
+    let output = File::create(filename)?;
+
+    let encoder = PNGEncoder::new(output);
+    encoder.encode(pixels, bounds.0 as u32, bounds.1 as u32, ColorType::Gray(8))?;
+
+    Ok(())
 }
 
 fn render(
@@ -11,6 +27,21 @@ fn render(
     upper_left: Complex<f64>,
     lower_right: Complex<f64>,
 ) {
+    assert!(pixels.len() == bounds.0 * bounds.1);
+
+    for row in 0..bounds.1 {
+        for col in 0..bounds.0 {
+            let pix: u8;
+            match pixel_to_complex(bounds, (col, row), upper_left, lower_right) {
+                Some(c) => match escape_time(c, 255) {
+                    None => pix = 0,
+                    Some(i) => pix = 255 - i as u8,
+                },
+                None => pix = 0,
+            }
+            pixels[row * bounds.0 + col] = pix;
+        }
+    }
 }
 
 /// Given the bounds of an image, and the upper left and bottom right
@@ -70,11 +101,9 @@ fn parse_complex(pair: &str) -> Option<Complex<f64>> {
 /// Returns None if unable to parse pair.
 fn parse_pair<T: FromStr>(pair: &str, delim: char) -> Option<(T, T)> {
     match pair.find(delim) {
-        Some(index) => {
-            match (T::from_str(&pair[..index]), T::from_str(&pair[index + 1..])) {
-                (Ok(x), Ok(y)) => Some((x, y)),
-                _ => None,
-            }
+        Some(index) => match (T::from_str(&pair[..index]), T::from_str(&pair[index + 1..])) {
+            (Ok(x), Ok(y)) => Some((x, y)),
+            _ => None,
         },
         None => None,
     }
